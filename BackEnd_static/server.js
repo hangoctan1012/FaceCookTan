@@ -5,8 +5,8 @@ const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 
-const { connectRabbitMQ } = require("./config/rabbitmq");
-const startConsumer = require("./services/consumer");
+// const { connectRabbitMQ } = require("./config/rabbitmq");
+// const startConsumer = require("./services/consumer");
 
 const Admin = require("./models/adminModel");
 const searchRoute = require("./routes/searchRoute");
@@ -62,8 +62,8 @@ async function startServer() {
     await importAdminsIfEmpty();
 
     // RabbitMQ
-    await connectRabbitMQ();
-    setTimeout(() => startConsumer(), 500);
+    // await connectRabbitMQ();
+    // setTimeout(() => startConsumer(), 500);
 
     // Routes
     app.use("/stat/login", loginRoute);

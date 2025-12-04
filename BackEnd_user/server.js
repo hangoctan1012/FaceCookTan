@@ -5,8 +5,8 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const fs = require("fs");
 
-const { connectRabbitMQ } = require("./config/rabbitmq");
-const startFollowersRPC = require("./services/followConsumer");
+// const { connectRabbitMQ } = require("./config/rabbitmq");
+// const startFollowersRPC = require("./services/followConsumer");
 
 const app = express();
 
@@ -127,12 +127,12 @@ db.once("open", async () => {
 });
 
 // ==== KHỞI TẠO RABBITMQ VÀ RPC ====
-async function startServices() {
-  await connectRabbitMQ();       // đảm bảo kết nối xong
-  await startFollowersRPC();     // đảm bảo channel sẵn sàng
-}
+// async function startServices() {
+//   await connectRabbitMQ();       // đảm bảo kết nối xong
+//   await startFollowersRPC();     // đảm bảo channel sẵn sàng
+// }
 
-startServices();
+// startServices();
 
 // Chạy server
 const PORT = process.env.PORT || 3002;
