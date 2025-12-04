@@ -47,7 +47,7 @@ mongoose
       console.log("⚠️ recipedb.ingre.json not found, skip import");
     }
 
-    const PORT = process.env.PORT || 5001;
+    const PORT = 5001;
     app.listen(PORT, () =>
       console.log(`🚀 Recipe service running on port ${PORT}`)
     );

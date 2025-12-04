@@ -15,7 +15,7 @@ const loginRoute = require("./routes/loginRoute");
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 7001;
+const PORT = 7001;
 const MONGO_URI = process.env.MONGO_URI;
 
 // --------------------------------------------------

@@ -5,9 +5,8 @@ const bodyParser = require("body-parser");
 const fs = require("fs");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
-const {
-  connectRabbitMQ
-} = require("./config/rabbitmq");
+
+// const { connectRabbitMQ } = require("./config/rabbitmq");
 
 const postRoutes = require("./routes/postRoutes");
 const saveRoutes = require("./routes/saveRoutes");
@@ -38,6 +37,24 @@ app.use("/api/like", likeRoutes);
 app.use("/api/comment", commentRoutes);
 app.use("/api/postAdmin", adminRoutes);
 
+// Helper to fix MongoDB Extended JSON dates
+const fixDates = (obj) => {
+  if (!obj) return obj;
+  if (obj.$date) return new Date(obj.$date);
+  return obj;
+};
+
+// Helper to sanitize an array of objects
+const sanitizeData = (data) => {
+  return data.map(item => {
+    const newItem = { ...item };
+    if (newItem.createdAt) newItem.createdAt = fixDates(newItem.createdAt);
+    if (newItem.updatedAt) newItem.updatedAt = fixDates(newItem.updatedAt);
+    if (newItem._id && newItem._id.$oid) newItem._id = newItem._id.$oid; // Fix ObjectIds if needed
+    return newItem;
+  });
+};
+
 mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
     console.log("✅ Post service connected to MongoDB");
@@ -52,7 +69,8 @@ mongoose.connect(process.env.MONGO_URI)
 
       const count = await Post.countDocuments();
       if (count === 0 && posts.length > 0) {
-        await Post.insertMany(posts);
+        const sanitizedPosts = sanitizeData(posts);
+        await Post.insertMany(sanitizedPosts);
         console.log(`📦 Imported ${posts.length} posts from JSON`);
       } else {
         console.log("⚠️ Posts collection already has data, skip import");
@@ -71,7 +89,8 @@ mongoose.connect(process.env.MONGO_URI)
 
       const count = await Like.countDocuments();
       if (count === 0 && likes.length > 0) {
-        await Like.insertMany(likes);
+        const sanitizedLikes = sanitizeData(likes);
+        await Like.insertMany(sanitizedLikes);
         console.log(`💖 Imported ${likes.length} like entries from JSON`);
       } else {
         console.log("⚠️ Likes collection already has data, skip import");
@@ -90,16 +109,10 @@ mongoose.connect(process.env.MONGO_URI)
       const postStats = await Post.aggregate([{
         $group: {
           _id: {
-            year: {
-              $year: "$createdAt"
-            },
-            month: {
-              $month: "$createdAt"
-            }
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" }
           },
-          count: {
-            $sum: 1
-          }
+          count: { $sum: 1 }
         }
       }]);
 
@@ -130,16 +143,10 @@ mongoose.connect(process.env.MONGO_URI)
       const likeStats = await Like.aggregate([{
         $group: {
           _id: {
-            year: {
-              $year: "$createdAt"
-            },
-            month: {
-              $month: "$createdAt"
-            }
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" }
           },
-          count: {
-            $sum: 1
-          }
+          count: { $sum: 1 }
         }
       }]);
 
@@ -165,7 +172,8 @@ mongoose.connect(process.env.MONGO_URI)
       const comments = JSON.parse(fs.readFileSync(commentFile));
       const count = await Comment.countDocuments();
       if (count === 0 && comments.length > 0) {
-        await Comment.insertMany(comments);
+        const sanitizedComments = sanitizeData(comments);
+        await Comment.insertMany(sanitizedComments);
         console.log(`💬 Imported ${comments.length} comments`);
       } else console.log("⚠️ Comments collection already has data, skip import");
     } else {
@@ -183,8 +191,6 @@ mongoose.connect(process.env.MONGO_URI)
       if (count === 0 && saves.length > 0) {
         console.log("📥 Preparing saves import...");
 
-        // ⭐ Không cần tự tạo _id, createdAt, updatedAt
-        // → Mongoose sẽ tự generate composite key và timestamps
         const savesToInsert = saves.map(s => ({
           userID: s.userID,
           postID: s.postID
@@ -199,13 +205,15 @@ mongoose.connect(process.env.MONGO_URI)
       console.log("⚠️ postdb.save.json not found, skip import");
     }
 
-    await connectRabbitMQ();
-    console.log("🐰 Connected to RabbitMQ.");
+    // await connectRabbitMQ();
+    // console.log("🐰 Connected to RabbitMQ.");
+
     // -------------------
     // Start server
     // -------------------
-    app.listen(process.env.PORT || 4001, () =>
-      console.log(`🚀 Post service running on port ${process.env.PORT || 4001}`)
+    const PORT = 4001;
+    app.listen(PORT, () =>
+      console.log(`🚀 Post service running on port ${PORT}`)
     );
   })
   .catch(err => console.error("❌ MongoDB error:", err));

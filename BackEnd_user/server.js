@@ -135,5 +135,5 @@ db.once("open", async () => {
 // startServices();
 
 // Chạy server
-const PORT = process.env.PORT || 3002;
+const PORT = 3002;
 app.listen(PORT, () => console.log(`🚀 User service chạy ở http://localhost:${PORT}`));
