@@ -11,7 +11,7 @@ const startFollowersRPC = require("./services/followConsumer");
 const app = express();
 
 // Middleware
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173", credentials: true }));
 app.use(bodyParser.json());
 
 // Import model và route
@@ -23,8 +23,8 @@ const Follow = require("./models/followModel");
 const followRoutes = require("./routes/followRoutes");
 app.use("/api/follow", followRoutes);
 
-const adminRoutes=require("./routes/adminRoutes");
-app.use("/api/userAdmin",adminRoutes);
+const adminRoutes = require("./routes/adminRoutes");
+app.use("/api/userAdmin", adminRoutes);
 
 // Kết nối MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -51,40 +51,40 @@ db.once("open", async () => {
       console.log("✅ Imported follows.json");
     }
     // ======= AUTO BUILD countUser nếu rỗng =======
-const CountUser = require("./models/countUserModel");
-const countUserDocs = await CountUser.countDocuments();
+    const CountUser = require("./models/countUserModel");
+    const countUserDocs = await CountUser.countDocuments();
 
-if (countUserDocs === 0) {
-  console.log("⚠️ countUser trống → bắt đầu đếm lại từ users...");
+    if (countUserDocs === 0) {
+      console.log("⚠️ countUser trống → bắt đầu đếm lại từ users...");
 
-  const pipelineUser = [
-    {
-      $group: {
-        _id: {
-          year: { $year: "$createdAt" },
-          month: { $month: "$createdAt" }
+      const pipelineUser = [
+        {
+          $group: {
+            _id: {
+              year: { $year: "$createdAt" },
+              month: { $month: "$createdAt" }
+            },
+            count: { $sum: 1 }
+          }
         },
-        count: { $sum: 1 }
+        { $sort: { "_id.year": 1, "_id.month": 1 } }
+      ];
+
+      const userGrouped = await User.aggregate(pipelineUser);
+
+      if (userGrouped.length === 0) {
+        console.log("ℹ️ users collection trống, bỏ qua tạo countUser.");
+      } else {
+        const docs = userGrouped.map(g => ({
+          year: g._id.year,
+          month: g._id.month,
+          count: g.count
+        }));
+
+        await CountUser.insertMany(docs);
+        console.log("✅ Đã tạo dữ liệu thống kê countUser từ users!");
       }
-    },
-    { $sort: { "_id.year": 1, "_id.month": 1 } }
-  ];
-
-  const userGrouped = await User.aggregate(pipelineUser);
-
-  if (userGrouped.length === 0) {
-    console.log("ℹ️ users collection trống, bỏ qua tạo countUser.");
-  } else {
-    const docs = userGrouped.map(g => ({
-      year: g._id.year,
-      month: g._id.month,
-      count: g.count
-    }));
-
-    await CountUser.insertMany(docs);
-    console.log("✅ Đã tạo dữ liệu thống kê countUser từ users!");
-  }
-}
+    }
     // ======= AUTO BUILD countFollow nếu rỗng =======
     const CountFollow = require("./models/countFollowModel");
     const countFollowDocs = await CountFollow.countDocuments();

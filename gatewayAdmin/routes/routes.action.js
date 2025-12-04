@@ -1,3 +1,3 @@
 module.exports = {
-  "/stat/report":"http://localhost:7001",
+  "/stat/report": process.env.STATIC_URL || "http://localhost:7001",
 };

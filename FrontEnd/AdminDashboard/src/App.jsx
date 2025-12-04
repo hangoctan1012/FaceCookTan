@@ -5,6 +5,9 @@ import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Posts from './pages/Posts';
 import Recipes from './pages/Recipes';
+import TopSearch from './pages/TopSearch';
+
+import Analytics from './pages/Analytics';
 
 // Placeholder pages
 const Placeholder = ({ title }) => (
@@ -23,6 +26,8 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="posts" element={<Posts />} />
           <Route path="recipes" element={<Recipes />} />
+          <Route path="top-search" element={<TopSearch />} />
+          <Route path="analytics" element={<Analytics />} />
         </Route>
       </Routes>
     </Router>

@@ -19,7 +19,7 @@ const app = express();
 app.use(cookieParser());
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: [process.env.FRONTEND_URL || "http://localhost:5173"],
     credentials: true,
   })
 );
@@ -78,9 +78,9 @@ app.use("/", (req, res) => {
   delete headers.host;
 
   if (req.admin) {
-  headers["x-admin-id"] = req.admin.id;      // <---- FIXED
-  headers["x-admin-action"] = req.admin.action;
-}
+    headers["x-admin-id"] = req.admin.id;      // <---- FIXED
+    headers["x-admin-action"] = req.admin.action;
+  }
 
   const options = { method: req.method, headers };
 
@@ -104,7 +104,7 @@ app.use("/", (req, res) => {
 app.get("/", (req, res) => res.send("🌐 API Gateway đang hoạt động! 🚀"));
 
 // ================== START ==================
-const PORT = process.env.GATEWAY_PORT || 9000;
+const PORT = process.env.PORT || process.env.GATEWAY_PORT || 9000;
 app.listen(PORT, () => {
   console.log(`🚪 Gateway chạy ở http://localhost:${PORT}`);
 });

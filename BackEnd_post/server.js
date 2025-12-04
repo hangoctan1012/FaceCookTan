@@ -13,7 +13,7 @@ const postRoutes = require("./routes/postRoutes");
 const saveRoutes = require("./routes/saveRoutes");
 const likeRoutes = require("./routes/likeRoutes");
 const commentRoutes = require("./routes/commentRoutes");
-const adminRoutes=require("./routes/adminRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const CountPost = require("./models/countPostModel");
 const CountLike = require("./models/countLikeModel");

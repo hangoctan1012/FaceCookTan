@@ -1,8 +1,9 @@
 module.exports = {
-  "/stat/login": "http://localhost:7001",
-  "/api/users": "http://localhost:3002",
-  "/api/post": "http://localhost:4001",
-  "/api/recipe": "http://localhost:5001",
-  "/api/userAdmin": "http://localhost:3002",
-  "/api/postAdmin": "http://localhost:4001",
+  "/stat/login": process.env.STATIC_URL || "http://localhost:7001",
+  "/api/users": process.env.USER_URL || "http://localhost:3002",
+  "/api/post": process.env.POST_URL || "http://localhost:4001",
+  "/api/recipe": process.env.RECIPE_URL || "http://localhost:5001",
+  "/api/userAdmin": process.env.USER_URL || "http://localhost:3002",
+  "/api/postAdmin": process.env.POST_URL || "http://localhost:4001",
+  "/stat/search": process.env.STATIC_URL || "http://localhost:7001",
 };

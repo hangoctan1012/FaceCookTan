@@ -14,6 +14,10 @@ export default defineConfig({
         target: 'http://localhost:9000',
         changeOrigin: true,
       },
+      '/stat': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+      },
     }
   }
 })
