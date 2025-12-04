@@ -1,0 +1,15 @@
+{
+    "name": "facecook-backend-monorepo",
+    "version": "1.0.0",
+    "description": "Unified backend deployment for FaceCook",
+    "scripts": {
+        "install-all": "npm install concurrently && npm install --prefix gatewayAdmin && npm install --prefix BackEnd_user && npm install --prefix BackEnd_post && npm install --prefix BackEnd_recipe && npm install --prefix BackEnd_static",
+        "start": "concurrently \"npm start --prefix gatewayAdmin\" \"npm start --prefix BackEnd_user\" \"npm start --prefix BackEnd_post\" \"npm start --prefix BackEnd_recipe\" \"npm start --prefix BackEnd_static\""
+    },
+    "dependencies": {
+        "concurrently": "^8.2.2"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
