@@ -17,7 +17,7 @@ const StatsCard = ({ title, value, icon: Icon, color, trend }) => {
                     <span className={`font-medium ${trend >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                         {trend > 0 ? '+' : ''}{trend}%
                     </span>
-                    <span className="text-gray-400 ml-2">vs last month</span>
+                    <span className="text-gray-400 ml-2">so với tháng trước</span>
                 </div>
             )}
         </div>

@@ -46,7 +46,7 @@ const TopSearch = () => {
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <h2 className="text-2xl font-bold text-gray-800">Top Search Statistics</h2>
+                <h2 className="text-2xl font-bold text-gray-800">Thống Kê Tìm Kiếm Hàng Đầu</h2>
 
                 {/* Filters */}
                 <div className="flex flex-wrap gap-2">
@@ -55,29 +55,29 @@ const TopSearch = () => {
                         value={type}
                         onChange={(e) => setType(e.target.value)}
                     >
-                        <option value="">All Types</option>
-                        <option value="name">Name</option>
-                        <option value="user_name">Username</option>
-                        <option value="tag">Tag</option>
+                        <option value="">Tất Cả</option>
+                        <option value="name">Tên</option>
+                        <option value="user_name">Tên người dùng</option>
+                        <option value="tag">Thẻ</option>
                     </select>
 
                     <input
                         type="number"
-                        placeholder="Day"
+                        placeholder="Ngày"
                         className="p-2 w-20 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
                         value={day}
                         onChange={(e) => setDay(e.target.value)}
                     />
                     <input
                         type="number"
-                        placeholder="Month"
+                        placeholder="Tháng"
                         className="p-2 w-20 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
                         value={month}
                         onChange={(e) => setMonth(e.target.value)}
                     />
                     <input
                         type="number"
-                        placeholder="Year"
+                        placeholder="Năm"
                         className="p-2 w-24 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
                         value={year}
                         onChange={(e) => setYear(e.target.value)}
@@ -88,28 +88,28 @@ const TopSearch = () => {
             {/* Content */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 {loading ? (
-                    <div className="p-10 text-center text-gray-500">Loading statistics...</div>
+                    <div className="p-10 text-center text-gray-500">Đang tải thống kê...</div>
                 ) : error ? (
                     <div className="p-10 text-center text-red-500">
-                        Error: {error} <br />
-                        <span className="text-sm text-gray-400">Make sure BackEnd_static is running on port 7001</span>
+                        Lỗi: {error} <br />
+                        <span className="text-sm text-gray-400">Đảm bảo BackEnd_static đang chạy trên cổng 7001</span>
                     </div>
                 ) : data.length === 0 ? (
-                    <div className="p-10 text-center text-gray-500">No data found for these filters.</div>
+                    <div className="p-10 text-center text-gray-500">Không tìm thấy dữ liệu cho các bộ lọc này.</div>
                 ) : (
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 border-b border-gray-100">
                             <tr>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Keyword</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Count</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Searched</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Từ Khóa</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Loại</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Số Lượng</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tìm Kiếm Lần Cuối</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {data.map((item, index) => (
                                 <tr key={item._id || index} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 font-medium text-gray-900">{item.keyword}</td>
+                                    <td className="px-6 py-4 font-medium text-gray-900">{item.target}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium 
                                             ${item.type === 'tag' ? 'bg-purple-100 text-purple-700' :
@@ -120,7 +120,7 @@ const TopSearch = () => {
                                     </td>
                                     <td className="px-6 py-4 font-semibold text-blue-600">{item.count}</td>
                                     <td className="px-6 py-4 text-sm text-gray-500">
-                                        {item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'N/A'}
+                                        {item.updatedAt ? new Date(item.updatedAt).toLocaleString('vi-VN') : 'N/A'}
                                     </td>
                                 </tr>
                             ))}

@@ -1,17 +1,17 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, Utensils, LogOut, Search, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Utensils, LogOut, Search, BarChart2, Flag } from 'lucide-react';
 
 const Sidebar = () => {
     const location = useLocation();
 
     const menuItems = [
-        { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-        { path: '/users', icon: Users, label: 'Users' },
-        { path: '/posts', icon: FileText, label: 'Posts' },
-        { path: '/recipes', icon: Utensils, label: 'Recipes' },
-        { path: '/top-search', icon: Search, label: 'Top Search' },
-        { path: '/analytics', icon: BarChart2, label: 'Analytics' },
+        { path: '/', icon: LayoutDashboard, label: 'Tổng Quan' },
+        { path: '/users', icon: Users, label: 'Người Dùng' },
+        { path: '/posts', icon: FileText, label: 'Bài Viết' },
+        { path: '/recipes', icon: Utensils, label: 'Công Thức' },
+        { path: '/top-search', icon: Search, label: 'Tìm Kiếm Hàng Đầu' },
+        { path: '/reports', icon: Flag, label: 'Báo Cáo' },
     ];
 
     return (
@@ -23,7 +23,13 @@ const Sidebar = () => {
             <nav className="flex-1 p-4 space-y-2">
                 {menuItems.map((item) => {
                     const Icon = item.icon;
-                    const isActive = location.pathname === item.path;
+                    let isActive = location.pathname === item.path;
+
+                    // Handle detail page active states
+                    if (item.path === '/users' && location.pathname.startsWith('/user/')) isActive = true;
+                    if (item.path === '/posts' && location.pathname.startsWith('/post/')) isActive = true;
+                    if (item.path === '/recipes' && location.pathname.startsWith('/recipe/')) isActive = true;
+                    if (item.path === '/reports' && (location.pathname.startsWith('/report/') || location.pathname.startsWith('/comment/'))) isActive = true;
 
                     return (
                         <Link
@@ -44,7 +50,7 @@ const Sidebar = () => {
             <div className="p-4 border-t border-orange-400">
                 <button className="flex items-center space-x-3 px-4 py-3 w-full text-orange-100 hover:bg-orange-600 hover:text-white rounded-lg transition-colors">
                     <LogOut size={20} />
-                    <span className="font-medium">Logout</span>
+                    <span className="font-medium">Đăng Xuất</span>
                 </button>
             </div>
         </div>

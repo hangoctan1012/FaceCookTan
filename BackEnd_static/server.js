@@ -5,17 +5,18 @@ const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 
-// const { connectRabbitMQ } = require("./config/rabbitmq");
-// const startConsumer = require("./services/consumer");
+const { connectRabbitMQ } = require("./config/rabbitmq");
+const startConsumer = require("./services/consumer");
 
 const Admin = require("./models/adminModel");
 const searchRoute = require("./routes/searchRoute");
 const loginRoute = require("./routes/loginRoute");
+const reportRoute = require("./routes/reportRoute");
 
 const app = express();
 app.use(express.json());
 
-const PORT = 7001;
+const PORT = process.env.PORT || 7001;
 const MONGO_URI = process.env.MONGO_URI;
 
 // --------------------------------------------------
@@ -62,12 +63,13 @@ async function startServer() {
     await importAdminsIfEmpty();
 
     // RabbitMQ
-    // await connectRabbitMQ();
-    // setTimeout(() => startConsumer(), 500);
+    await connectRabbitMQ();
+    setTimeout(() => startConsumer(), 500);
 
     // Routes
     app.use("/stat/login", loginRoute);
     app.use("/stat/search", searchRoute);
+    app.use("/stat/report",reportRoute);
 
     // Start
     app.listen(PORT, () => {

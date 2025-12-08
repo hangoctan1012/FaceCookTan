@@ -2,53 +2,46 @@ const express = require("express");
 const router = express.Router();
 const Follow = require("../models/followModel");
 const CountFollow = require("../models/countFollowModel");
-const CountUser=require("../models/countUserModel")
+const CountUser = require("../models/countUserModel");
 const User = require("../models/userModel");
-//Dành cho admin
-/* ---------------------- GET: Thống kê follow ---------------------- */
-router.get("/follow", async (req, res) => {
+
+/* ==========================================================
+   Helper: Tạo range ngày theo day / month / year
+========================================================== */
+function buildDateRange({ day, month, year }) {
+  const now = new Date();
+  const y = year ? Number(year) : now.getFullYear();
+  const m = month ? Number(month) - 1 : now.getMonth();
+
+  let start, end;
+
+  if (day) {
+    start = new Date(y, m, Number(day));
+    end = new Date(y, m, Number(day) + 1);
+  } else if (month) {
+    start = new Date(y, m, 1);
+    end = new Date(y, m + 1, 1);
+  } else if (year) {
+    start = new Date(y, 0, 1);
+    end = new Date(y + 1, 0, 1);
+  }
+
+  if (start && end) return { start, end };
+  return null;
+}
+
+/* ==========================================================
+   GET /admin/follow
+========================================================== */
+router.get("/countFollow", async (req, res) => {
   try {
     const { userID, day, month, year } = req.query;
+    const range = buildDateRange({ day, month, year });
 
-    // ================================
-    // CASE 1: Có userID → thống kê cho 1 user
-    // ================================
+    /* CASE 1: Có userID → thống kê theo user */
     if (userID) {
-      let filter = { to: userID };
-
-      if (day || month || year) {
-        let start = new Date();
-        let end = new Date();
-
-        if (year) {
-          start = new Date(year, 0, 1);
-          end = new Date(Number(year) + 1, 0, 1);
-        }
-
-        if (year && month) {
-          start = new Date(year, Number(month) - 1, 1);
-          end = new Date(year, Number(month), 1);
-        }
-
-        if (year && month && day) {
-          start = new Date(year, Number(month) - 1, Number(day));
-          end = new Date(year, Number(month) - 1, Number(day) + 1);
-        }
-
-        if (month && !year) {
-          const y = new Date().getFullYear();
-          start = new Date(y, Number(month) - 1, 1);
-          end = new Date(y, Number(month), 1);
-        }
-
-        if (day && !month && !year) {
-          const now = new Date();
-          start = new Date(now.getFullYear(), now.getMonth(), Number(day));
-          end = new Date(now.getFullYear(), now.getMonth(), Number(day) + 1);
-        }
-
-        filter.createdAt = { $gte: start, $lt: end };
-      }
+      const filter = { to: userID };
+      if (range) filter.createdAt = { $gte: range.start, $lt: range.end };
 
       const count = await Follow.countDocuments(filter);
 
@@ -61,42 +54,28 @@ router.get("/follow", async (req, res) => {
       });
     }
 
-    // ================================
-    // CASE 2: Không có userID → thống kê hệ thống
-    // ================================
-    // Nếu lọc theo "day" → buộc phải query Follow vì countFollow không đủ độ phân giải
+    /* CASE 2: Không userID → thống kê theo hệ thống */
     if (day) {
-      let start, end;
-      const now = new Date();
-
-      const y = year ? Number(year) : now.getFullYear();
-      const m = month ? Number(month) - 1 : now.getMonth();
-
-      start = new Date(y, m, Number(day));
-      end = new Date(y, m, Number(day) + 1);
-
       const count = await Follow.countDocuments({
-        createdAt: { $gte: start, $lt: end }
+        createdAt: { $gte: range.start, $lt: range.end }
       });
 
       return res.json({
         success: true,
         scope: "system",
         source: "Follow (day-level)",
-        filters: { day, month: m + 1, year: y },
+        filters: { day, month, year },
         count
       });
     }
 
-    // Trường hợp lọc theo month/year → dùng countFollow
+    // Month/year → dùng CountFollow
     const query = {};
     if (month) query.month = Number(month);
     if (year) query.year = Number(year);
 
-    // Nếu không có gì → trả toàn bộ hệ thống
     const list = await CountFollow.find(query).sort({ year: 1, month: 1 });
-
-    const total = list.reduce((sum, doc) => sum + doc.count, 0);
+    const total = list.reduce((s, d) => s + d.count, 0);
 
     return res.json({
       success: true,
@@ -112,51 +91,37 @@ router.get("/follow", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-/* ---------------------- GET: Thống kê user đăng ký ---------------------- */
-// GET /user?day=..&month=..&year=..
-router.get("/user", async (req, res) => {
+
+/* ==========================================================
+   GET /admin/user
+========================================================== */
+router.get("/countUser", async (req, res) => {
   try {
     const { day, month, year } = req.query;
+    const range = buildDateRange({ day, month, year });
 
-    // ================================
-    // CASE 1: Có lọc theo "day" → query trực tiếp User
-    // ================================
     if (day) {
-      const now = new Date();
-
-      const y = year ? Number(year) : now.getFullYear();
-      const m = month ? Number(month) - 1 : now.getMonth();
-
-      const start = new Date(y, m, Number(day));
-      const end = new Date(y, m, Number(day) + 1);
-
       const count = await User.countDocuments({
-        createdAt: { $gte: start, $lt: end }
+        createdAt: { $gte: range.start, $lt: range.end }
       });
 
       return res.json({
         success: true,
-        scope: "system",
         source: "User (day-level)",
-        filters: { day, month: m + 1, year: y },
+        filters: { day, month, year },
         count
       });
     }
 
-    // ================================
-    // CASE 2: Lọc theo month/year → dùng countUser
-    // ================================
     const query = {};
     if (month) query.month = Number(month);
     if (year) query.year = Number(year);
 
     const list = await CountUser.find(query).sort({ year: 1, month: 1 });
-
-    const total = list.reduce((sum, doc) => sum + doc.count, 0);
+    const total = list.reduce((s, d) => s + d.count, 0);
 
     return res.json({
       success: true,
-      scope: "system",
       source: "countUser",
       filters: { day, month, year },
       total,
@@ -169,5 +134,132 @@ router.get("/user", async (req, res) => {
   }
 });
 
+router.get("/:userID", async (req, res) => {
+  try {
+    const { userID } = req.params;
+
+    if (!userID) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu userID"
+      });
+    }
+
+    const user = await User.findById(userID)
+      .select("-password") // ❗ admin không cần xem password
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy user"
+      });
+    }
+
+    res.json({
+      success: true,
+      user
+    });
+
+  } catch (err) {
+    console.error("❌ Lỗi GET /:userID:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get("/", async (req, res) => {
+  try {
+    const { day, month, year, limit, page, search, sortBy, ids } = req.query;
+
+    let filter = {};
+
+    // ------------------ IDS FILTER (Bulk Fetch) ------------------
+    if (ids) {
+      const idList = ids.split(',').map(id => id.trim()).filter(id => id);
+      if (idList.length > 0) {
+        filter._id = { $in: idList };
+      }
+    }
+
+    // ------------------ TEXT SEARCH ------------------
+    if (search) {
+      const regex = new RegExp(search, "i");
+      filter.$or = [
+        { name: regex },
+        { user_name: regex },
+        { email: regex }
+      ];
+    }
+
+    // ------------------ TIME FILTER ------------------
+    if (day || month || year) {
+      let start = new Date();
+      let end = new Date();
+
+      if (year) {
+        start = new Date(year, 0, 1);
+        end = new Date(Number(year) + 1, 0, 1);
+      }
+
+      if (year && month) {
+        start = new Date(year, Number(month) - 1, 1);
+        end = new Date(year, Number(month), 1);
+      }
+
+      if (year && month && day) {
+        start = new Date(year, Number(month) - 1, Number(day));
+        end = new Date(year, Number(month) - 1, Number(day) + 1);
+      }
+
+      if (month && !year) {
+        const y = new Date().getFullYear();
+        start = new Date(y, Number(month) - 1, 1);
+        end = new Date(y, Number(month), 1);
+      }
+
+      if (day && !month && !year) {
+        const now = new Date();
+        start = new Date(now.getFullYear(), now.getMonth(), Number(day));
+        end = new Date(now.getFullYear(), now.getMonth(), Number(day) + 1);
+      }
+
+      filter.createdAt = { $gte: start, $lt: end };
+    }
+
+    // ------------------ SORTING ------------------
+    let sortOption = { createdAt: -1 }; // Default newest
+    if (sortBy === 'oldest') sortOption = { createdAt: 1 };
+    if (sortBy === 'mostPosts') sortOption = { numPosts: -1 };
+    if (sortBy === 'mostFollowers') sortOption = { numFollowed: -1 };
+
+    // ------------------ PAGINATION ------------------
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    // Tổng số user thỏa filter
+    const total = await User.countDocuments(filter);
+
+    const users = await User.find(filter)
+      .select("_id user_name name avatar email numPosts numFollowed numFollowing createdAt tags preference")
+      .sort(sortOption)
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
+
+    res.json({
+      success: true,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+      limit: limitNum,
+      users
+    });
+
+  } catch (err) {
+    console.error("❌ Error in GET /userAdmin:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 module.exports = router;

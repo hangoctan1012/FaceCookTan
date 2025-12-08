@@ -3,67 +3,94 @@ import { Users, FileText, Heart, Activity, MoreHorizontal } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import StatsCard from '../components/StatsCard';
 import api from '../services/api';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
+    const navigate = useNavigate();
     const [stats, setStats] = useState({
         users: 0,
         posts: 0,
         likes: 0,
-        engagement: 0
+        follows: 0
     });
     const [topSearchData, setTopSearchData] = useState([]);
+    const [userGrowthData, setUserGrowthData] = useState([]);
     const [recentPosts, setRecentPosts] = useState([]);
     const [loading, setLoading] = useState(true);
-
-    // Mock data for AI Personalization Chart
-    const aiData = [
-        { time: '0', val1: -100, val2: -50, val3: -80 },
-        { time: '4', val1: -80, val2: -40, val3: -70 },
-        { time: '8', val1: 100, val2: 50, val3: 0 },
-        { time: '12', val1: 500, val2: 300, val3: 150 },
-        { time: '16', val1: 400, val2: 200, val3: 50 },
-        { time: '20', val1: 0, val2: -50, val3: -80 },
-        { time: '24', val1: -100, val2: -80, val3: -100 },
-    ];
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 // Fetch Stats
                 const currentYear = new Date().getFullYear();
-                const [userRes, postRes, recipeRes, searchRes] = await Promise.all([
-                    api.get('/api/userAdmin/user'),
-                    api.get('/api/postAdmin/post'),
-                    api.get('/api/recipe'),
+                const [userRes, postRes, likeRes, followRes, searchRes] = await Promise.all([
+                    api.get('/api/userAdmin/countUser'),
+                    api.get('/api/postAdmin/countPost'),
+                    api.get('/api/postAdmin/countLike'),
+                    api.get('/api/userAdmin/countFollow'),
                     api.get(`/stat/search?limit=10&year=${currentYear}`)
                 ]);
 
                 const userTotal = userRes.data.success ? userRes.data.total : 0;
                 const postTotal = postRes.data.success ? postRes.data.total : 0;
-
-                // Fetch Recent Posts for Table
-                // Try to fetch actual posts list if possible, otherwise fallback to empty or mock
-                let postsList = [];
-                try {
-                    const postsListRes = await api.get('/api/post?limit=5');
-                    postsList = postsListRes.data.success ? postsListRes.data.posts : [];
-                } catch (err) {
-                    console.warn("Could not fetch recent posts list:", err);
-                }
+                const likeTotal = likeRes.data.success ? likeRes.data.total : 0;
+                const followTotal = followRes.data.success ? followRes.data.total : 0;
 
                 setStats({
                     users: userTotal,
                     posts: postTotal,
-                    likes: 45231, // Mock for now or fetch from like stats
-                    engagement: 68.4 // Mock
+                    likes: likeTotal,
+                    follows: followTotal
                 });
+
+                // Process User Growth Data
+                if (userRes.data.success && userRes.data.detail) {
+                    const growthData = userRes.data.detail.map(item => ({
+                        name: `Tháng ${item.month}`,
+                        value: item.count
+                    }));
+                    setUserGrowthData(growthData);
+                }
+
+                // Fetch Recent Posts for Table
+                try {
+                    const postsListRes = await api.get('/api/postAdmin?limit=5');
+                    if (postsListRes.data.success) {
+                        const rawPosts = postsListRes.data.posts || [];
+
+                        // Fetch authors for these posts
+                        const userIds = [...new Set(rawPosts.map(p => p.userID))].filter(id => id);
+                        let userMap = {};
+
+                        if (userIds.length > 0) {
+                            const userRes = await api.get('/api/userAdmin', {
+                                params: { ids: userIds.join(','), limit: userIds.length }
+                            });
+                            if (userRes.data.success) {
+                                userRes.data.users.forEach(u => {
+                                    userMap[u._id] = u;
+                                });
+                            }
+                        }
+
+                        // Map posts with author info
+                        const mappedPosts = rawPosts.map(post => ({
+                            ...post,
+                            author: userMap[post.userID] || { name: 'Unknown', avatar: null }
+                        }));
+
+                        setRecentPosts(mappedPosts);
+                    }
+                } catch (err) {
+                    console.warn("Could not fetch recent posts list:", err);
+                }
 
                 // Process Top Search Data for Bar Chart
                 if (searchRes.data.success) {
                     const rawData = searchRes.data.data || [];
                     // Transform for chart
                     const chartData = rawData.map(item => ({
-                        name: item.keyword,
+                        name: item.target,
                         value: item.count,
                         color: '#3b82f6' // Default blue
                     })).slice(0, 10);
@@ -77,8 +104,6 @@ const Dashboard = () => {
                     setTopSearchData(chartData);
                 }
 
-                setRecentPosts(postsList);
-
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
             } finally {
@@ -89,39 +114,43 @@ const Dashboard = () => {
         fetchData();
     }, []);
 
+    const handleRowClick = (post) => {
+        navigate(`/post/${post._id}`);
+    };
+
     if (loading) return <div className="flex justify-center items-center h-screen text-amber-500">Loading Dashboard...</div>;
 
     return (
         <div className="space-y-8">
             {/* Header Section */}
             <div>
-                <h2 className="text-3xl font-bold text-gray-900">Facecook Dashboard</h2>
+                <h2 className="text-3xl font-bold text-gray-900">Tổng Quan Facecook</h2>
                 <p className="text-gray-500 mt-1">Chào mừng trở lại! Đây là tổng quan về hoạt động trong năm {new Date().getFullYear()}.</p>
             </div>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatsCard
-                    title="Total Posts"
+                    title="Tổng Bài Viết"
                     value={stats.posts.toLocaleString()}
                     icon={FileText}
                     trend={12.5}
                 />
                 <StatsCard
-                    title="Total Users"
+                    title="Tổng Người Dùng"
                     value={stats.users.toLocaleString()}
                     icon={Users}
                     trend={15.2}
                 />
                 <StatsCard
-                    title="Total Likes, comments"
+                    title="Tổng Lượt Thích"
                     value={stats.likes.toLocaleString()}
                     icon={Heart}
                     trend={20.1}
                 />
                 <StatsCard
-                    title="Engagement Rate"
-                    value={`${stats.engagement}%`}
+                    title="Tổng Lượt Theo Dõi"
+                    value={stats.follows.toLocaleString()}
                     icon={Activity}
                     trend={5.3}
                 />
@@ -150,20 +179,18 @@ const Dashboard = () => {
                     </div>
                 </div>
 
-                {/* AI Personalization Chart */}
+                {/* User Growth Chart */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">Số lượt cá nhân hóa bằng AI</h3>
-                    <p className="text-sm text-gray-500 mb-6">Tổng số lượt theo khung 24 giờ</p>
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">Tăng trưởng người dùng</h3>
+                    <p className="text-sm text-gray-500 mb-6">Số lượng người dùng mới theo tháng</p>
                     <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={aiData}>
+                            <LineChart data={userGrowthData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
+                                <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
                                 <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
                                 <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                                <Line type="monotone" dataKey="val1" name="21-Jun" stroke="#2563eb" strokeWidth={2} dot={{ r: 4 }} />
-                                <Line type="monotone" dataKey="val2" name="Equinox" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
-                                <Line type="monotone" dataKey="val3" name="21-Dec" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
+                                <Line type="monotone" dataKey="value" name="Người dùng mới" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
@@ -185,24 +212,55 @@ const Dashboard = () => {
                     <table className="w-full text-left">
                         <thead className="bg-gray-50/50">
                             <tr>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Post ID</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Mã Bài</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Người Đăng</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Món Ăn</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Likes</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nội dung</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Lượt Thích</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Trạng Thái</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ngày</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {recentPosts.map((post) => (
-                                <tr key={post._id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">#{post._id.slice(-5)}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-700">{post.author?.name || 'Unknown'}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{post.title || post.content?.slice(0, 30) || 'No Title'}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{post.numLikes || 0}</td>
+                                <tr
+                                    key={post._id}
+                                    onClick={() => handleRowClick(post)}
+                                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                >
+                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                                        <div className="flex items-center space-x-3">
+                                            {post.media && post.media.length > 0 ? (
+                                                <img src={post.media[0]} alt="" className="w-10 h-10 rounded-lg object-cover bg-gray-100" />
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 text-xs">No Img</div>
+                                            )}
+                                            <span className="text-gray-500">#{post._id.slice(-5)}</span>
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-4">
-                                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-900 text-white">
-                                            Hoạt động
+                                        <div className="flex items-center space-x-2">
+                                            {post.author?.avatar ? (
+                                                <img src={post.author.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                            ) : (
+                                                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">
+                                                    {post.author?.name?.charAt(0) || '?'}
+                                                </div>
+                                            )}
+                                            <span className="text-sm text-gray-700">{post.author?.name || 'Không rõ'}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium truncate max-w-xs" title={post.caption}>
+                                        {post.caption || 'Không có nội dung'}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                        <div className="flex space-x-3">
+                                            <span className="flex items-center"><Heart size={14} className="mr-1" /> {post.like || 0}</span>
+                                            <span className="flex items-center"><FileText size={14} className="mr-1" /> {post.comment || 0}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${post.deleted ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                            {post.deleted ? 'Đã xóa' : 'Hoạt động'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-500">

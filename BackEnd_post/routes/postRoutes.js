@@ -20,7 +20,7 @@ router.get("/search", async (req, res) => {
     const { q, after } = req.query;
     const limit = 10;
 
-    const query = {};
+    const query = { deleted: false };
 
     if (after) {
       query.createdAt = { $lt: new Date(after) };
@@ -98,7 +98,7 @@ router.get("/tag", async (req, res) => {
     const { q, after } = req.query;
     const limit = 10;
 
-    const query = {};
+    const query = { deleted: false };
 
     if (after) {
       query.createdAt = { $lt: new Date(after) };
@@ -178,10 +178,11 @@ router.get("/saved", async (req, res) => {
     const postIDs = saves.map((s) => s.postID);
 
     const posts = await Post.find({
-      _id: {
-        $in: postIDs
-      }
-    })
+        _id: {
+          $in: postIDs,
+          deleted: false
+        }
+      })
       .sort({
         createdAt: -1
       })
@@ -226,7 +227,7 @@ router.get("/", async (req, res) => {
     // -------------------------------
     // 🟦 Build query object
     // -------------------------------
-    const query = {};
+    const query = { deleted: false };
 
     // Cursor pagination
     if (after) {
@@ -329,7 +330,7 @@ router.get("/:userID", async (req, res) => {
     }
 
     const posts = await Post.find({
-      userID
+      userID,deleted: false
     }).sort({
       createdAt: -1
     }).lean();
@@ -444,6 +445,18 @@ const upload = multer({
 router.post("/upload", upload.array("media", 10), async (req, res) => {
   try {
     const requestUserID = req.headers["x-user-id"];
+    // 🔥 Check violation (ban post)
+    const { checkViolation } = require("../utils/checkViolation");
+    const result = await checkViolation(requestUserID, "violation_post");
+
+    if (!result.expired) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn đang bị cấm đăng bài",
+        expireAt: result.expireAt
+      });
+    }
+
     const {
       type,
       caption,
@@ -468,8 +481,8 @@ router.post("/upload", upload.array("media", 10), async (req, res) => {
         const cloudRes = await axios.post(
           "https://api.cloudinary.com/v1_1/dx6uxiydg/image/upload",
           formData, {
-          headers: formData.getHeaders()
-        }
+            headers: formData.getHeaders()
+          }
         );
 
         uploadedUrls.push(cloudRes.data.secure_url);
@@ -499,22 +512,22 @@ router.post("/upload", upload.array("media", 10), async (req, res) => {
     await newPost.save();
 
     // 📊 Cập nhật thống kê số bài viết theo tháng
-    try {
+  try {
       const createdAt = newPost.createdAt || new Date();
       const month = createdAt.getMonth() + 1; // 1-12
       const year = createdAt.getFullYear();
 
-      // Tìm record tháng đó, nếu không có thì tạo
-      const updatedCount = await CountPost.findOneAndUpdate(
-        { month, year },
-        { $inc: { count: 1 } },
-        { upsert: true, new: true }
-      );
+    // Tìm record tháng đó, nếu không có thì tạo
+  const updatedCount = await CountPost.findOneAndUpdate(
+    { month, year },
+    { $inc: { count: 1 } },
+    { upsert: true, new: true }
+  );
 
-      console.log("📊 Updated countPost:", updatedCount);
-    } catch (err) {
-      console.error("❌ Lỗi cập nhật countPost:", err);
-    }
+  console.log("📊 Updated countPost:", updatedCount);
+} catch (err) {
+  console.error("❌ Lỗi cập nhật countPost:", err);
+}
 
     // 🔔 Push event vào với queue notify
     const channel = getChannel();
@@ -549,39 +562,148 @@ router.post("/upload", upload.array("media", 10), async (req, res) => {
   }
 });
 
-// 🗑️ DELETE Post (Admin)
-router.delete("/:id", async (req, res) => {
+// ================== DELETE POST ==================
+router.patch("/delete/:postID", async (req, res) => {
   try {
-    const { id } = req.params;
-    const deletedPost = await Post.findByIdAndDelete(id);
+    const requestUserID = req.headers["x-user-id"];
+    const { postID } = req.params;
 
-    if (!deletedPost) {
-      return res.status(404).json({ success: false, message: "Post not found" });
+    if (!requestUserID)
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu userID trong header"
+      });
+
+    // 🧩 Tìm post
+    const post = await Post.findById(postID);
+
+    if (!post)
+      return res.status(404).json({
+        success: false,
+        message: "Post không tồn tại"
+      });
+
+    // ❌ Không phải post của mình → cấm xóa
+    if (post.userID !== requestUserID) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không thể xóa post của người khác"
+      });
     }
 
-    // Xóa các dữ liệu liên quan (Like, Comment, Save...)
-    await Like.deleteMany({ postID: id });
-    await Save.deleteMany({ postID: id });
-    // await Comment.deleteMany({ postID: id }); // Nếu có model Comment riêng
+    // Nếu đã deleted rồi
+    if (post.deleted === true) {
+      return res.json({
+        success: true,
+        message: "Post đã bị xóa trước đó"
+      });
+    }
 
-    // Giảm countPost
-    try {
-      const createdAt = deletedPost.createdAt;
-      const month = createdAt.getMonth() + 1;
-      const year = createdAt.getFullYear();
-      await CountPost.findOneAndUpdate(
-        { month, year },
-        { $inc: { count: -1 } }
+    // 🗑 Set deleted = true
+    post.deleted = true;
+    await post.save();
+
+    // 🐰 Gửi event sang Notify Service
+    const channel = getChannel();
+    if (channel) {
+      const payload = {
+        actorId: requestUserID,
+        userID: requestUserID,
+        type: "remove_post",
+        targetId: postID
+      };
+
+      console.log("📤 Sending REMOVE_POST event:", payload);
+
+      channel.sendToQueue(
+        process.env.RABBITMQ_NOTIFY_QUEUE,
+        Buffer.from(JSON.stringify(payload)),
+        { persistent: true }
       );
-    } catch (e) {
-      console.error("Lỗi giảm countPost:", e);
     }
 
-    res.json({ success: true, message: "Post deleted successfully" });
+    return res.json({
+      success: true,
+      message: "Đã xóa bài viết",
+      deletedPostID: postID
+    });
+
   } catch (err) {
-    console.error("❌ Error deleting post:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("❌ Lỗi delete post:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi xóa bài viết",
+      error: err.message
+    });
   }
 });
+
+
+// 🧩 Report bài viết
+router.post("/report", async (req, res) => {
+  try {
+    const author = req.header("x-user-id");
+    const { target, content } = req.body;
+
+    if (!author || !target) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu author (x-user-id) hoặc target (postID)"
+      });
+    }
+
+    // 1️⃣ Kiểm tra bài viết có tồn tại không
+    const existPost = await Post.findById(target);
+
+    if (!existPost) {
+      return res.status(404).json({
+        success: false,
+        message: "Bài viết không tồn tại hoặc đã bị xóa!"
+      });
+    }
+    const reportedUser = existPost.userID;
+    // 2️⃣ Payload gửi sang Static Service
+    const payload = {
+      author,
+      reportedUser,
+      type: "post",
+      target,
+      content: content || ""
+    };
+
+    // 3️⃣ Gửi vào RabbitMQ stats_queue
+    const channel = getChannel();
+    if (!channel) {
+      console.error("❌ Không thể gửi RabbitMQ: Channel chưa có!");
+      return res.status(500).json({
+        success: false,
+        message: "RabbitMQ chưa sẵn sàng!"
+      });
+    }
+
+    const QUEUE = process.env.RABBITMQ_STATS_QUEUE || "stats_queue";
+
+    console.log("📤 Sending POST REPORT to RabbitMQ:", payload);
+
+    channel.sendToQueue(
+      QUEUE,
+      Buffer.from(JSON.stringify(payload)),
+      { persistent: true }
+    );
+
+    return res.json({
+      success: true,
+      message: "Report bài viết đã được gửi vào hàng đợi",
+    });
+
+  } catch (err) {
+    console.error("❌ Lỗi khi gửi report post:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
+
 
 module.exports = router;

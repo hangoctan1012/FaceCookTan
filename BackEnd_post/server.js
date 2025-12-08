@@ -5,14 +5,16 @@ const bodyParser = require("body-parser");
 const fs = require("fs");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
-
-// const { connectRabbitMQ } = require("./config/rabbitmq");
+const {
+  connectRabbitMQ
+} = require("./config/rabbitmq");
+const normalizeDates= require("./utils/normalize");
 
 const postRoutes = require("./routes/postRoutes");
 const saveRoutes = require("./routes/saveRoutes");
 const likeRoutes = require("./routes/likeRoutes");
 const commentRoutes = require("./routes/commentRoutes");
-const adminRoutes = require("./routes/adminRoutes");
+const adminRoutes=require("./routes/adminRoutes");
 
 const CountPost = require("./models/countPostModel");
 const CountLike = require("./models/countLikeModel");
@@ -22,10 +24,12 @@ const Save = require("./models/saveModel");
 const Like = require("./models/likeModel");
 const Comment = require("./models/commentModel");
 
+const startConsumer = require("./services/consumer");
+
 const app = express();
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: "http://localhost:5173",
   credentials: true,
 }));
 app.use(bodyParser.json());
@@ -37,24 +41,6 @@ app.use("/api/like", likeRoutes);
 app.use("/api/comment", commentRoutes);
 app.use("/api/postAdmin", adminRoutes);
 
-// Helper to fix MongoDB Extended JSON dates
-const fixDates = (obj) => {
-  if (!obj) return obj;
-  if (obj.$date) return new Date(obj.$date);
-  return obj;
-};
-
-// Helper to sanitize an array of objects
-const sanitizeData = (data) => {
-  return data.map(item => {
-    const newItem = { ...item };
-    if (newItem.createdAt) newItem.createdAt = fixDates(newItem.createdAt);
-    if (newItem.updatedAt) newItem.updatedAt = fixDates(newItem.updatedAt);
-    if (newItem._id && newItem._id.$oid) newItem._id = newItem._id.$oid; // Fix ObjectIds if needed
-    return newItem;
-  });
-};
-
 mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
     console.log("✅ Post service connected to MongoDB");
@@ -65,12 +51,11 @@ mongoose.connect(process.env.MONGO_URI)
     const postFile = "./backups/postdb.posts.json";
     if (fs.existsSync(postFile)) {
       const rawData = fs.readFileSync(postFile);
-      const posts = JSON.parse(rawData);
-
+      let posts = JSON.parse(rawData);
+      posts = normalizeDates(posts);
       const count = await Post.countDocuments();
       if (count === 0 && posts.length > 0) {
-        const sanitizedPosts = sanitizeData(posts);
-        await Post.insertMany(sanitizedPosts);
+        await Post.insertMany(posts);
         console.log(`📦 Imported ${posts.length} posts from JSON`);
       } else {
         console.log("⚠️ Posts collection already has data, skip import");
@@ -85,12 +70,11 @@ mongoose.connect(process.env.MONGO_URI)
     const likeFile = "./backups/postdb.like.json";
     if (fs.existsSync(likeFile)) {
       const rawData = fs.readFileSync(likeFile);
-      const likes = JSON.parse(rawData);
-
+      let likes = JSON.parse(rawData);
+      likes = normalizeDates(likes);
       const count = await Like.countDocuments();
       if (count === 0 && likes.length > 0) {
-        const sanitizedLikes = sanitizeData(likes);
-        await Like.insertMany(sanitizedLikes);
+        await Like.insertMany(likes);
         console.log(`💖 Imported ${likes.length} like entries from JSON`);
       } else {
         console.log("⚠️ Likes collection already has data, skip import");
@@ -109,10 +93,16 @@ mongoose.connect(process.env.MONGO_URI)
       const postStats = await Post.aggregate([{
         $group: {
           _id: {
-            year: { $year: "$createdAt" },
-            month: { $month: "$createdAt" }
+            year: {
+              $year: "$createdAt"
+            },
+            month: {
+              $month: "$createdAt"
+            }
           },
-          count: { $sum: 1 }
+          count: {
+            $sum: 1
+          }
         }
       }]);
 
@@ -143,10 +133,16 @@ mongoose.connect(process.env.MONGO_URI)
       const likeStats = await Like.aggregate([{
         $group: {
           _id: {
-            year: { $year: "$createdAt" },
-            month: { $month: "$createdAt" }
+            year: {
+              $year: "$createdAt"
+            },
+            month: {
+              $month: "$createdAt"
+            }
           },
-          count: { $sum: 1 }
+          count: {
+            $sum: 1
+          }
         }
       }]);
 
@@ -169,11 +165,11 @@ mongoose.connect(process.env.MONGO_URI)
     // ------------------- IMPORT COMMENTS -------------------
     const commentFile = "./backups/postdb.comment.json";
     if (fs.existsSync(commentFile)) {
-      const comments = JSON.parse(fs.readFileSync(commentFile));
+      let comments = JSON.parse(fs.readFileSync(commentFile));
+      comments = normalizeDates(comments);
       const count = await Comment.countDocuments();
       if (count === 0 && comments.length > 0) {
-        const sanitizedComments = sanitizeData(comments);
-        await Comment.insertMany(sanitizedComments);
+        await Comment.insertMany(comments);
         console.log(`💬 Imported ${comments.length} comments`);
       } else console.log("⚠️ Comments collection already has data, skip import");
     } else {
@@ -184,13 +180,15 @@ mongoose.connect(process.env.MONGO_URI)
 
     if (fs.existsSync(saveFile)) {
       const rawData = fs.readFileSync(saveFile);
-      const saves = JSON.parse(rawData);
-
+      let saves = JSON.parse(rawData);
+      saves = normalizeDates(saves);
       const count = await Save.countDocuments();
 
       if (count === 0 && saves.length > 0) {
         console.log("📥 Preparing saves import...");
 
+        // ⭐ Không cần tự tạo _id, createdAt, updatedAt
+        // → Mongoose sẽ tự generate composite key và timestamps
         const savesToInsert = saves.map(s => ({
           userID: s.userID,
           postID: s.postID
@@ -205,15 +203,14 @@ mongoose.connect(process.env.MONGO_URI)
       console.log("⚠️ postdb.save.json not found, skip import");
     }
 
-    // await connectRabbitMQ();
-    // console.log("🐰 Connected to RabbitMQ.");
-
+    await connectRabbitMQ();
+    console.log("🐰 Connected to RabbitMQ.");
+    await startConsumer();
     // -------------------
     // Start server
     // -------------------
-    const PORT = 4001;
-    app.listen(PORT, () =>
-      console.log(`🚀 Post service running on port ${PORT}`)
+    app.listen(process.env.PORT || 4001, () =>
+      console.log(`🚀 Post service running on port ${process.env.PORT || 4001}`)
     );
   })
   .catch(err => console.error("❌ MongoDB error:", err));
